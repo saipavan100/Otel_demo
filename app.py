@@ -76,11 +76,24 @@ otel_request_duration = meter.create_histogram(
     description="Request duration in seconds"
 )
 
-# Middleware to track metrics
+# Middleware to track metrics and add endpoint context to logs
 @app.before_request
 def before_request():
     from flask import request, g
+    import logging
     g.start_time = time.time()
+    
+    # Add endpoint info to log context
+    old_factory = logging.getLogRecordFactory()
+    
+    def record_factory(*args, **kwargs):
+        record = old_factory(*args, **kwargs)
+        record.http_method = request.method
+        record.http_endpoint = request.path
+        record.http_url = request.url
+        return record
+    
+    logging.setLogRecordFactory(record_factory)
 
 @app.after_request
 def after_request(response):
@@ -104,18 +117,20 @@ def after_request(response):
 
 @app.route("/")
 def hello():
-    logger.info("Processing request at / endpoint")
+    from flask import request
+    logger.info(f"Processing request to {request.path}")
     with tracer.start_as_current_span("hello-span") as span:
         span.set_attribute("custom.attribute", "hello-world")
+        span.set_attribute("http.endpoint", request.path)
         time.sleep(random.uniform(0.1, 0.3))
-        logger.info("Successfully processed / request")
+        logger.info(f"Successfully processed {request.path}")
         return jsonify({"message": "Hello from OTel Sample App!", "status": "success"})
 
-@app.route("/api/users")
-def get_users():
-    logger.info("Fetching users list")
+@appfrom flask import request
+    logger.info(f"Fetching users list from {request.path}")
     with tracer.start_as_current_span("get-users") as span:
         span.set_attribute("users.count", 3)
+        span.set_attribute("http.endpoint", request.path)
         # Simulate database query
         time.sleep(random.uniform(0.05, 0.15))
         users = [
@@ -123,31 +138,35 @@ def get_users():
             {"id": 2, "name": "Bob"},
             {"id": 3, "name": "Charlie"}
         ]
+        logger.info(f"Retrieved {len(users)} users from {request.path}
+        ]
         logger.info(f"Retrieved {len(users)} users")
         return jsonify({"users": users})
 
-@app.route("/api/users/<int:user_id>")
-def get_user(user_id):
-    logger.info(f"Fetching user with id: {user_id}")
+@appfrom flask import request
+    logger.info(f"Fetching user with id: {user_id} from {request.path}")
     with tracer.start_as_current_span("get-user-by-id") as span:
         span.set_attribute("user.id", user_id)
+        span.set_attribute("http.endpoint", request.path)
         
         # Simulate database lookup
         time.sleep(random.uniform(0.05, 0.2))
         
         if user_id > 10:
-            logger.warning(f"User {user_id} not found")
+            logger.warning(f"User {user_id} not found at {request.path}")
             span.set_attribute("error", True)
             return jsonify({"error": "User not found"}), 404
         
         user = {"id": user_id, "name": f"User{user_id}", "email": f"user{user_id}@example.com"}
+        logger.info(f"Retrieved user: {user['name']} from {request.path
+        user = {"id": user_id, "name": f"User{user_id}", "email": f"user{user_id}@example.com"}
         logger.info(f"Retrieved user: {user['name']}")
         return jsonify({"user": user})
 
-@app.route("/api/orders")
-def create_order():
-    logger.info("Creating new order")
+@appfrom flask import request
+    logger.info(f"Creating new order at {request.path}")
     with tracer.start_as_current_span("create-order") as span:
+        span.set_attribute("http.endpoint", request.path)
         # Simulate order creation with nested spans
         with tracer.start_as_current_span("validate-order"):
             time.sleep(random.uniform(0.02, 0.05))
@@ -163,27 +182,33 @@ def create_order():
         
         order_id = random.randint(1000, 9999)
         span.set_attribute("order.id", order_id)
+        logger.info(f"Order {order_id} created successfully at {request.path
+        span.set_attribute("order.id", order_id)
         logger.info(f"Order created successfully with id: {order_id}")
         return jsonify({"order_id": order_id, "status": "created"})
 
-@app.route("/api/error")
-def trigger_error():
-    logger.error("Simulating an error scenario")
+@appfrom flask import request
+    logger.error(f"Simulating an error scenario at {request.path}")
     with tracer.start_as_current_span("error-endpoint") as span:
         span.set_attribute("error", True)
         span.set_attribute("error.type", "SimulatedError")
+        span.set_attribute("http.endpoint", request.path)
         try:
             raise ValueError("This is a simulated error for testing")
         except Exception as e:
+            logger.exception(f"An error occurred at {request.path}ed error for testing")
+        except Exception as e:
             logger.exception("An error occurred")
             span.record_exception(e)
-            return jsonify({"error": str(e)}), 500
-
-@app.route("/api/slow")
-def slow_endpoint():
-    logger.info("Processing slow request")
+    from flask import request
+    logger.info(f"Processing slow request at {request.path}")
     with tracer.start_as_current_span("slow-endpoint") as span:
+        span.set_attribute("http.endpoint", request.path)
         delay = random.uniform(1, 3)
+        span.set_attribute("delay.seconds", delay)
+        logger.info(f"Simulating slow operation for {delay:.2f} seconds at {request.path}")
+        time.sleep(delay)
+        logger.info(f"Slow operation completed at {request.path}
         span.set_attribute("delay.seconds", delay)
         logger.info(f"Simulating slow operation for {delay:.2f} seconds")
         time.sleep(delay)
