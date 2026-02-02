@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 import logging
 import time
 import random
@@ -76,28 +76,15 @@ otel_request_duration = meter.create_histogram(
     description="Request duration in seconds"
 )
 
-# Middleware to track metrics and add endpoint context to logs
+# Middleware to track metrics
 @app.before_request
 def before_request():
-    from flask import request, g
-    import logging
+    from flask import g
     g.start_time = time.time()
-    
-    # Add endpoint info to log context
-    old_factory = logging.getLogRecordFactory()
-    
-    def record_factory(*args, **kwargs):
-        record = old_factory(*args, **kwargs)
-        record.http_method = request.method
-        record.http_endpoint = request.path
-        record.http_url = request.url
-        return record
-    
-    logging.setLogRecordFactory(record_factory)
 
 @app.after_request
 def after_request(response):
-    from flask import request, g
+    from flask import g
     if hasattr(g, 'start_time'):
         duration = time.time() - g.start_time
         prom_request_counter.labels(
@@ -117,7 +104,6 @@ def after_request(response):
 
 @app.route("/")
 def hello():
-    from flask import request
     logger.info(f"Processing request to {request.path}")
     with tracer.start_as_current_span("hello-span") as span:
         span.set_attribute("custom.attribute", "hello-world")
@@ -126,7 +112,8 @@ def hello():
         logger.info(f"Successfully processed {request.path}")
         return jsonify({"message": "Hello from OTel Sample App!", "status": "success"})
 
-@appfrom flask import request
+@app.route("/api/users")
+def get_users():
     logger.info(f"Fetching users list from {request.path}")
     with tracer.start_as_current_span("get-users") as span:
         span.set_attribute("users.count", 3)
@@ -141,7 +128,8 @@ def hello():
         logger.info(f"Retrieved {len(users)} users from {request.path}")
         return jsonify({"users": users})
 
-@appfrom flask import request
+@app.route("/api/users/<int:user_id>")
+def get_user(user_id):
     logger.info(f"Fetching user with id: {user_id} from {request.path}")
     with tracer.start_as_current_span("get-user-by-id") as span:
         span.set_attribute("user.id", user_id)
@@ -156,12 +144,11 @@ def hello():
             return jsonify({"error": "User not found"}), 404
         
         user = {"id": user_id, "name": f"User{user_id}", "email": f"user{user_id}@example.com"}
-        logger.info(f"Retrieved user: {user['name']} from {request.path
-        user = {"id": user_id, "name": f"User{user_id}", "email": f"user{user_id}@example.com"}
-        logger.info(f"Retrieved user: {user['name']}")
+        logger.info(f"Retrieved user: {user['name']} from {request.path}")
         return jsonify({"user": user})
 
-@appfrom flask import request
+@app.route("/api/orders")
+def create_order():
     logger.info(f"Creating new order at {request.path}")
     with tracer.start_as_current_span("create-order") as span:
         span.set_attribute("http.endpoint", request.path)
@@ -180,12 +167,11 @@ def hello():
         
         order_id = random.randint(1000, 9999)
         span.set_attribute("order.id", order_id)
-        logger.info(f"Order {order_id} created successfully at {request.path
-        span.set_attribute("order.id", order_id)
-        logger.info(f"Order created successfully with id: {order_id}")
+        logger.info(f"Order {order_id} created successfully at {request.path}")
         return jsonify({"order_id": order_id, "status": "created"})
 
-@appfrom flask import request
+@app.route("/api/error")
+def trigger_error():
     logger.error(f"Simulating an error scenario at {request.path}")
     with tracer.start_as_current_span("error-endpoint") as span:
         span.set_attribute("error", True)
@@ -194,11 +180,12 @@ def hello():
         try:
             raise ValueError("This is a simulated error for testing")
         except Exception as e:
-            logger.exception(f"An error occurred at {request.path}ed error for testing")
-        except Exception as e:
-            logger.exception("An error occurred")
+            logger.exception(f"An error occurred at {request.path}")
             span.record_exception(e)
-    from flask import request
+            return jsonify({"error": str(e)}), 500
+
+@app.route("/api/slow")
+def slow_endpoint():
     logger.info(f"Processing slow request at {request.path}")
     with tracer.start_as_current_span("slow-endpoint") as span:
         span.set_attribute("http.endpoint", request.path)
@@ -206,15 +193,11 @@ def hello():
         span.set_attribute("delay.seconds", delay)
         logger.info(f"Simulating slow operation for {delay:.2f} seconds at {request.path}")
         time.sleep(delay)
-        logger.info(f"Slow operation completed at {request.path}
-        span.set_attribute("delay.seconds", delay)
-        logger.info(f"Simulating slow operation for {delay:.2f} seconds")
-        time.sleep(delay)
-        logger.info("Slow operation completed")
+        logger.info(f"Slow operation completed at {request.path}")
         return jsonify({"message": "Slow operation completed", "delay": delay})
 
 @app.route("/metrics")
-def metrics():
+def metrics_endpoint():
     """Prometheus metrics endpoint"""
     return Response(generate_latest(), mimetype=CONTENT_TYPE_LATEST)
 
