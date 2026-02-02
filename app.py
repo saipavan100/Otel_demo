@@ -138,9 +138,7 @@ def hello():
             {"id": 2, "name": "Bob"},
             {"id": 3, "name": "Charlie"}
         ]
-        logger.info(f"Retrieved {len(users)} users from {request.path}
-        ]
-        logger.info(f"Retrieved {len(users)} users")
+        logger.info(f"Retrieved {len(users)} users from {request.path}")
         return jsonify({"users": users})
 
 @appfrom flask import request
